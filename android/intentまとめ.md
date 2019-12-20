@@ -1,6 +1,6 @@
-# startActivity()によるアプリの起動
----
-## 明示的intentで起動する場合
+# intent
+
+## 明示的intentでアプリを起動する
 - package名とclass名を指定し、ただ1つのアプリを起動する
 - 起動する相手のことを知っている必要がある
 
@@ -26,21 +26,21 @@
 
 ```kotlin
 fun test(){
-	val intent = Intent().apply{
+	Intent().apply{
 		// 第1引数に相手のpackage名
 		// 第2引数に相手のpacakge名の完全修飾を含む起動対象Activityのclass名
 		// ※class名だけだとresolveActivity()で失敗する
 		setClassName("com.example.client", "com.example.client.MainActivity")
-	}
-	// intentを受け取れるActivityが存在するか確認する
-	if(intent.resolveActivity(packageManager) != null){
-		startActivity(intent)
+	}.let{
+		// intentを受け取れるActivityが存在するか確認する
+		if(it.resolveActivity(packageManager) != null){
+			startActivity(intent)
+		}
 	}
 }
 ```
 
----
-## 暗黙的intentで起動する場合
+## 暗黙的intentでアプリを起動する
 - intent-filterで指定した条件に合致する不特定多数のアプリを起動する
 - 起動する相手のことを知らなくても良い
 
@@ -71,11 +71,56 @@ fun test(){
 
 ```kotlin
 fun test(){
-	val intent = Intent("/apps/myapplication")
-	if(intent.resolveActivity(packageManager) != null){
-		startActivity(intent)
+	Intent("/apps/myapplication").let{
+		if(it.resolveActivity(packageManager) != null){
+			startActivity(it)
+		}
 	}
 }
 ```
 
+## 起動済みActivityに暗黙intentを送信する
+### startActivity()でアプリを起動する場合
+```kotlin
+fun test(){
+	// 自前で定義したactionで暗黙intentを作る
+	Intent("myaction").apply{
+		// startActivity()に渡すintentなのでNEW_TASK必須
+		flags += Intent.FLAG_ACTIVITY_NEW_TASK
+	}.let{
+		// intentを受け取れるActivityがいるかチェック
+		if(it.resolveActivity(packageManager) != null){
+			// Activityを起動する
+			startActivity(it)
+		}
+	}
+}
+```
 
+### sendBroadcast()で起動済みアプリに送信する場合
+- resolveActivity()がチェックしているのは、恐らくAndroidManifest.xmlの`<IntentFilter>`で暗黙intentの受け取りを定義したActivityが存在するか否か
+	- だからresolve()出来なかったと思われる
+- 起動済みアプリへの暗黙intent送信ではresolveActivity()によるチェックが要らない
+
+```kotlin
+fun test(){
+	Intent("myaction").let{
+		// resolveActivity()によるチェックは不要
+		sendBroadcast(it)
+	}
+}
+```
+
+## BroadcastReceiver::onReceive()から暗黙intentを送信する
+- UIスレッドで実行させるためのHandler.postは不要
+- onReceive()引数のcontextを使ってsendBroadcast()すればOK
+
+```kotlin
+class MyReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+		Intent("myaction").let{
+			context.sendBroadcast(it)
+		}
+    }
+}
+```
