@@ -26,3 +26,41 @@ suspend fun player(name: String, table: Channel<Ball>) {
     }
 }
 ```
+
+## kotlin channel receive timeout
+- `Channel<T>.receive()`に待ち時間上限を付けたい
+	- [Cancellation and Timeouts - Kotlin Programming Language](https://kotlinlang.org/docs/reference/coroutines/cancellation-and-timeouts.html)
+	- kotlinx.coroutines.withTimeout(), withTimeoutOrNull()を使う
+	- coroutineブロックのキャンセル全般で使えるらしい
+
+```kotlin
+val channel = Channel<Int>()
+launch{
+	try{
+		// timeout時間(msec)を指定して時間制限付き処理を開始
+		val result = withTimeout(1000L){
+			// channel.send()されるまで待つ
+			channel.receive()
+		}
+	}catch(e: TimeoutCancellationException){
+		// timeout時には例外がthrowされる
+		print(e)
+	}
+}
+```
+
+```kotlin
+val channel = Channel<Int>()
+launch{
+	// timeout時間(msec)を指定して時間制限付き処理を開始
+	val result = withTimeoutOrNull(1000L){
+		// channel.send()されるまで待つ
+		channel.receive()
+	}
+	if(result == null){
+		// timeout発生
+	}else{
+		// channel.receive()の結果がresultに得られた
+	}
+}
+```
