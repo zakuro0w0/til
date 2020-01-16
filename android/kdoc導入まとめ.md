@@ -29,26 +29,47 @@ project/
 ```:project/build.gradle
 buildscript{
 	...
-	ext.dokka_version = '0.9.17'
+	ext.dokka_version = '0.10.0'
 }
 
 dependencies{
-	...
-	classpath "org.jetbrains.dokka:dokka-android-gradle-plugin:$dokka_version"
+	classpath "org.jetbrains.dokka:dokka-gradle-plugin:${dokka_version}"
 }
 ```
 
-2. モジュール直下のbuild.gralde変更
+2. dokka設定をプロジェクト配下のモジュール間で共有するためのdokka.gradleを作成
+
+```:project/dokka.gradle
+apply plugin: 'org.jetbrains.dokka'
+dokka {
+    outputFormat = 'gfm'
+    outputDirectory = "$buildDir/kdoc"
+    configuration {
+        includeNonPublic = true
+    }
+}
+```
+
+3. モジュール直下のbuild.gralde変更
 
 ```:module/build.gradle
-apply plugin: 'org.jetbrains.dokka-android'
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlin-android-extensions'
 
-dokka {
-	// html以外にjavadoc, markdown, gfm(github fravored markdown)も選べる
-    outputFormat = 'html'
-	// ドキュメントの出力先指定
-    outputDirectory = "$buildDir/kdoc"
+android {
+    compileSdkVersion 29
+    buildToolsVersion "29.0.2"
+    defaultConfig {...}
+    buildTypes {
+        release {...}
+    }
+    packagingOptions {...}
 }
+
+dependencies {...}
+
+apply from: rootProject.file('dokka.gradle')
 ```
 
 3. Gradleファイルとプロジェクトを同期
@@ -60,6 +81,10 @@ dokka {
 	- kdoc-generatorの機能により、関数のプロトタイプに応じたkdoc templateが自動生成される
 	- 後は各引数や戻り値の説明を記入する
 		- [KDoc 書き方メモ(Kotlin のドキュメンテーションコメント) - Qiita](https://qiita.com/opengl-8080/items/fe43adef48e6162e6166#基本文法)
+	- 2020.01時点のdokka ver0.10.0ではkdocコメント内の改行が生成されるドキュメントに反映されない
+		- `<br>`, `<pre>`タグ、LF(\n)は効果無し
+		- markdown書式の半角スペース2個、空行を挟んでも効果無し
+		- `##`による見出しを行頭に付ければ改行できるが、面倒すぎるので無し
 
 ```kotlin:main.kt
 /**
@@ -76,8 +101,8 @@ fun sum(x: Int, y:Int): Int{
 
 2. ドキュメントを出力する
 	- AndroidStudioでターミナルを開き、以下のコマンドを実行
+	- dokkaはAndroidDeveloperへのリンクを自動挿入するため、プロキシを突破できる状態か、プロキシの無いネットワーク環境で実行する必要があるため注意
 
 ```
 gradlew dokka
 ```
-
