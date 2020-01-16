@@ -32,6 +32,9 @@ suspend fun player(name: String, table: Channel<Ball>) {
 	- [Cancellation and Timeouts - Kotlin Programming Language](https://kotlinlang.org/docs/reference/coroutines/cancellation-and-timeouts.html)
 	- kotlinx.coroutines.withTimeout(), withTimeoutOrNull()を使う
 	- coroutineブロックのキャンセル全般で使えるらしい
+	- withTimeoutOrNull()のようなsuspend関数を呼び出す関数を作るためには...
+		- `suspend fun myFunc(){ withTimeout(1000L){...} }`
+		- ↑のようにsuspendを付ければOK
 
 ```kotlin
 val channel = Channel<Int>()
