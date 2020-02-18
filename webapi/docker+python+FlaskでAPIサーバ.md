@@ -14,6 +14,7 @@
 - 出来ることは多くなくて良いので、軽量で小さく始められるサーバ >> Flask
 
 ## ディレクトリ構成とファイルの配置
+```
 .
 ├── custom_webhook/
 │   ├── apache2/
@@ -28,6 +29,7 @@
 ├── gitlab_log/
 ├── gitlab_opt/
 └── runner_config/
+```
 
 ## custom_webhook/配下のファイル
 ### DockerFile
