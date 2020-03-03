@@ -86,3 +86,24 @@ gradlew ktlintCheck
 ```
 gradlew ktlintFormat
 ```
+
+#### ルールのカスタム方法
+- [ktlint::EditorConfig](https://github.com/pinterest/ktlint#editorconfig)
+	- [EditorConfig](https://editorconfig.org/#example-file)ファイルの記述で色々カスタムできる
+	- [[Android] ktlint の導入と感想 - Qiita](https://qiita.com/hkusu/items/f1c55a0e0d03543b24d5#lint-の実行)
+		- ↑の人はmax_line_length=128で1行あたりの最大文字数をカスタムしている
+		- ルール名は[ruleset/standard/*.kt](https://github.com/pinterest/ktlint/blob/master/ktlint-ruleset-standard/src/main/kotlin/com/pinterest/ktlint/ruleset/standard/NoWildcardImportsRule.kt)を参照
+			- ソースコード内のRule()に与える文字列がルール名
+
+```:.editorconfig
+# Unix-style newlines with a newline ending every file
+[*]
+end_of_line = lf
+insert_final_newline = true
+
+[*.{kt,kts}]
+max_line_length = 128
+
+# カンマ区切りで無効にしたいルールを並べる
+#disabled_rules = no-wildcard-imports
+```
