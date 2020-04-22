@@ -72,9 +72,35 @@ bash-4.4$ cat /nexus-data/admin.password
 
 ![](./attachments/anonymous_access.png)
 
-### 2. build.gradleからartifact登録
+#### 1.5. nexusのdeployment policyについて
+- 各リポジトリはdeployment policyを持っており、artifact登録時の挙動を設定できる
+- maven-release
+    - デフォルト設定は`Disable redeploy`であるため、同じversion値での再登録は失敗するようになっている
+    - 先に誰かがversion='1.0.0'で登録すると、再度version='1.0.0'で登録できない
+- maven-snapshot
+    - デフォルト設定は`Allow redploy`であるため、同じversion値での再登録が可能となっている
+    - version='1.0.0-SNAPSHOT'で何度でも再登録できる
 
-#### 2.1. mavenリポジトリとしてのURL確認
+### 2. artifact登録用nexusアカウント作成
+#### 2.1. deploy専用Roleの作成
+
+![](./attachments/create_nexus_role_01.png)
+
+- 特権にはadminとviewがあり、uploadだけならviewにするべき
+- maven-publicへのbrowseとreadは無くてもuploadできる
+    - このRoleを適用したユーザでnexusにログインした時、maven-publicも閲覧できるようにしておく
+
+![](./attachments/create_nexus_role_02.png)
+
+#### 2.2. deploy専用Userの作成
+
+![](./attachments/create_nexus_user_01.png)
+
+![](./attachments/create_nexus_user_02.png)
+
+
+### 3. build.gradleからartifact登録
+#### 3.1. mavenリポジトリとしてのURL確認
 - nexusでRepositoriesを開き、以下のリポジトリがあることを確認する
     - maven-public
     - maven-releases
@@ -88,7 +114,7 @@ bash-4.4$ cat /nexus-data/admin.password
 
 ![](./attachments/repository_url.png)
 
-#### 2.2. AndroidStudioのプロジェクト構成(apk等に依存されるjar/aarを作る側)
+#### 3.2. AndroidStudioのプロジェクト構成(apk等に依存されるjar/aarを作る側)
 - 以下のようなプロジェクト構成と仮定する
     - androidlibモジュールはandroidlib.aarを作る
 ```
@@ -98,19 +124,21 @@ project/
 ├── build.gradle
 └── maven.gradle
 ```
-
-#### 2.3. project/build.gradle
-```
-buildscript{
-    ## nexusコンテナのURL
-    ext.maven_url = 'http://localhost:8081/repository'
-}
-```
-
-#### 2.4. project/maven.gradle
+#### 3.3. project/maven.gradle
 
 ```
 apply plugin: 'maven'
+
+## nexusコンテナのURL
+ext.maven_url = 'http://localhost:8081/repository'
+
+## このmaven.gradleをapplyで取り込んだmoduleにて、
+## implementationでnexusからpackageを取得できるようにするための定義
+repositories {
+    maven{
+        url "${maven_url}/maven-public/"
+    }
+}
 
 ## `gradlew uploadArchives`コマンドで実行可能になるgradleタスクの定義
 ## maven.gradleをapplyしたmoduleの成果物(jar/aar)を指定のリポジトリに登録する
@@ -120,21 +148,19 @@ uploadArchives {
             ## 正式版を登録するreleaseリポジトリ
             repository(url: "${maven_url}/maven-releases") {
                 ## nexusのユーザ認証が必要
-                ## adminではなくupload権限のみ与えたアカウントにしておくべき
-                authentication(userName: 'admin', password: 'xxxxx')
+                authentication(userName: 'deployer', password: 'xxxxx')
             }
             ## 開発中の成果物を登録するsnapshotリポジトリ
             snapshotRepository(url: "${maven_url}/maven-snapshots") {
                 ## nexusのユーザ認証が必要
-                ## adminではなくupload権限のみ与えたアカウントにしておくべき
-                authentication(userName: 'admin', password: 'xxxxx')
+                authentication(userName: 'deployer', password: 'xxxxx')
             }
         }
     }
 }
 ```
 
-#### 2.5. project/androidlib/build.gradle
+#### 3.4. project/androidlib/build.gradle
 
 ```
 ## 別途定義したmaven.gradleを取り込む
@@ -152,7 +178,7 @@ group = 'com.nexus.test.example'
 version = '1.0.0'
 ```
 
-#### 2.6. artifactをmavenリポジトリにupload
+#### 3.5. artifactをmavenリポジトリにupload
 - AndroidStudioのTerminalにて以下のコマンドを実行する
     - 通常、mavenへのuploadはサーバ側のCIプロセスが行うので、開発者が実行することは無い(というかしてはならない)
 
@@ -160,42 +186,22 @@ version = '1.0.0'
 gradlew uploadArchives
 ```
 
-#### 2.7. mavenリポジトリに登録した成果物をnexusで確認する
+#### 3.6. mavenリポジトリに登録した成果物をnexusで確認する
 
 ![](./attachments/upload_artifact.png)
 
-### 3. 登録したartifactをnexus経由で取得する
+### 4. 登録したartifactをnexus経由で取得する
 
-#### 3.1. AndroidStudioのプロジェクト構成(jar/aarに依存するapk側)
+#### 4.1. AndroidStudioのプロジェクト構成(jar/aarに依存するapk側)
 
 ```
 project/
 ├── app
 │   └── build.gradle
-└── build.gradle
+├── build.gradle
+└── maven.gradle
 ```
-
-#### 3.2. project/build.gradle
-
-```
-buildscript {
-    ## nexusのURL
-    ext.maven_url = 'http://localhost:8081/repository'
-}
-
-allprojects {
-    repositories {
-        google()
-        jcenter()
-        maven{
-            ## nexusに登録されたjar/aarはmaven-publicリポジトリから入手する
-            url "${maven_url}/maven-public/"
-        }
-    }
-}
-```
-
-#### 3.3. project/app/build.gradle
+#### 4.2. project/app/build.gradle
 - nexusのBrowseにてimplementationするためのコードを確認できる
     - 基本的には`implementation "{group}:{module}:{version}"`でOK
     - 開発中のバージョンが欲しい場合はversionを`1.0.0-SNAPSHOT`等にする
@@ -203,11 +209,12 @@ allprojects {
 ![](./attachments/implementation_url.png)
 
 ```
+apply from: rootProject.file('maven.gradle')
 dependencies {
     implementation("com.nexus.test.example:androidlib:1.0.0")
 }
 ```
 
-#### 3.4. gradleの同期を実行
+#### 4.3. gradleの同期を実行
 - AndroidStudioにてgradle同期を実行すれば指定したnexusのURLからimplementationで指定したandroidlib.aarのver1.0.0を入手できる
 - 同期に失敗する場合はURLやimplementationの記述にミスが無いか確認すること
