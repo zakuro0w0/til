@@ -275,3 +275,15 @@ remote: ✔   found 0 problems, 0 warnings
 To http://mygitlab.com/sandbox/githooktest.git
    af47fc4..659ba81  master -> master
 ```
+
+## 注意点
+- gitlabへのbranch pushが、remote branchの新規作成とcommitの追加を兼ねている場合、pre-receiveによるcommitlintは正常に動作できない
+- remote branch createの場合、pre-receiveに渡されるold_revには40個の0が並ぶ
+    - この点についてはrefnameを見てmasterの最新commit hashで代替できる
+- 問題はold_revではなく、new_revのhash値をcommit hashとして認識できない点
+    - pre-receive実行時点では、まだpushされたbranchは生成されておらず、new_revのhash値に基づくcommit差分の取得も出来ないことが分かっている
+- これを回避するための運用としては以下が挙げられるが...守らせるのは厳しい
+    1. localで作成したbranchは何もcommitせずにすぐremoteへpushする
+    2. branchの作成は必ずgitlab UIから行う(ことにより、remote branchの存在を保証する)
+- いずれにせよ、master branchは必ず守ってくれるので、それだけでも価値はある
+- が、PRやMRでmasterを更新するタイミングで弾かれるのは辛すぎるので、開発者local環境にもcommitlintの導入は必要だろうというのが今の考え
