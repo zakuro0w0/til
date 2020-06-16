@@ -29,9 +29,9 @@ services:
         container_name: mygitlab.com
         hostname: 'mygitlab.com'
         environment:
-			# gitlab内部にbackup関連の設定項目もあった
-			# が、backupをスケジューリングできる訳ではなく、どこに作るかといった設定のみ
-			# スケジューリングのためにはホスト側のcron等による定期処理が必要
+	    # gitlab内部にbackup関連の設定項目もあった
+	    # が、backupをスケジューリングできる訳ではなく、どこに作るかといった設定のみ
+	    # スケジューリングのためにはホスト側のcron等による定期処理が必要
             GITLAB_OMNIBUS_CONFIG: |
                 gitlab_rails['manage_backup_path'] = true
                 gitlab_rails['backup_path'] = "/var/opt/gitlab/backups"
@@ -40,7 +40,7 @@ services:
         ports:
             - "10080:80"
         volumes:
-			# gitlabの設定backupは/etc/gitlab/
+	    # gitlabの設定backupは/etc/gitlab/
             - gitlab_etc:/etc/gitlab
     runner:
         image: gitlab/gitlab-runner
@@ -58,12 +58,12 @@ services:
         ports:
             - "8081:8081"
         volumes:
-			# nexusはバイナリリポジトリとして稼働するため、jarやapkのbackupが必要
-			# data volumeをbackup対象のディレクトリにマウントする
+	    # nexusはバイナリリポジトリとして稼働するため、jarやapkのbackupが必要
+	    # data volumeをbackup対象のディレクトリにマウントする
             - nexus_data:/nexus-data/
 volumes:
-	# external: trueとしたvolumeはdocker-compose upの前に
-	# docker volume createで作成しておく必要がある
+    # external: trueとしたvolumeはdocker-compose upの前に
+    # docker volume createで作成しておく必要がある
     gitlab_etc:
         external: true
     gitlab_opt:
