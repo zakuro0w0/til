@@ -276,3 +276,92 @@ dependencies {
 #### 5.3. gradleの同期を実行
 - AndroidStudioにてgradle同期を実行すれば指定したnexusのURLからimplementationで指定したandroidlib.aarのver1.0.0を入手できる
 - 同期に失敗する場合はURLやimplementationの記述にミスが無いか確認すること
+
+## nexusコンテナのデータ容量に関する注意点
+
+### nexusがuploadに対して500 Server errorを繰り返す
+- 流石におかしいと思ってdockerコンテナを覗いてみた
+- diskfull error的な何かが起きているらしい
+- [Sonatype Nexus (3.12) が orientdb が壊れたとかで起動しなくなったら - Qiita](https://qiita.com/knjname/items/202d9bfdaa63fa85b0ea)
+- [OrientDB corruption state in Nexus Repository version 3.2.0-01 - Stack Overflow](https://stackoverflow.com/questions/42951710/orientdb-corruption-state-in-nexus-repository-version-3-2-0-01)
+- [What to Do When the Database is Out of Disk Space – Sonatype Support](https://support.sonatype.com/hc/en-us/articles/360000052388-What-to-Do-When-the-Database-is-Out-of-Disk-Space)
+- [sonatype/nexus-oss - Gitter](https://gitter.im/sonatype/nexus-oss)
+```
+2020-07-21 06:28:59,117+0000 WARN  [qtp74878466-7737] deployer org.sonatype.nexus.repository.httpbridge.internal.ViewServlet - Failure servicing: PUT /repository/mavitted+41a65f7/myandroidlibrary-1.2.0-dev.1.uncommitted+41a65f7.aar
+com.orientechnologies.orient.core.exception.OLowDiskSpaceException: Error occurred while executing a write operation to database 'component' due to limited free space. Please close the database (or stop OrientDB), make room on your hard drive and then reopen the database. The minimal required space is 4096 MB. Required space is kCache.diskFreeSpaceLimit) .
+        DB name="component"
+
+```
+
+### nexusのデータ容量周りを調べる
+
+- nexusコンテナの中で`df -kh`してみた
+- `/nexus-data`配下が100%使われており、241MBしか残っていなかった
+- が、この`/dev/sda2`はnexusコンテナをホストしているvcsサーバそのものだった
+- ので、vcsサーバ自体で容量を食ってるから/nexus-dataに使える分が不足していることになる
+
+```shell
+$ docker exec -it mymaven.com bash
+bash-4.4$ df -kh
+Filesystem      Size  Used Avail Use% Mounted on
+overlay          40G   37G  241M 100% /
+tmpfs            64M     0   64M   0% /dev
+tmpfs           7.9G     0  7.9G   0% /sys/fs/cgroup
+/dev/sda2        40G   37G  241M 100% /nexus-data
+shm              64M     0   64M   0% /dev/shm
+tmpfs           7.9G     0  7.9G   0% /proc/acpi
+tmpfs           7.9G     0  7.9G   0% /proc/scsi
+tmpfs           7.9G     0  7.9G   0% /sys/firmware
+```
+
+- vcsサーバ上では/dev/sda2は`/`相当なので、どこでファイルが増えてもdockerコンテナの容量を圧迫する事になる
+- 試しに~/docker/gitlab/backups/から古いバックアップを削除すると少し容量に余裕が出来た
+- 元々容量が40GBと少ないこともあったが、バックアップを無暗に増やすのもよくなかった
+
+```shell
+$ df -kh
+Filesystem      Size  Used Avail Use% Mounted on
+udev            7.9G     0  7.9G   0% /dev
+tmpfs           1.6G  1.6M  1.6G   1% /run
+/dev/sda2        40G   35G  3.1G  92% /
+tmpfs           7.9G     0  7.9G   0% /dev/shm
+tmpfs           5.0M     0  5.0M   0% /run/lock
+tmpfs           7.9G     0  7.9G   0% /sys/fs/cgroup
+/dev/loop1       97M   97M     0 100% /snap/core/9436
+tmpfs           1.6G     0  1.6G   0% /run/user/1000
+/dev/loop2       97M   97M     0 100% /snap/core/9665
+```
+
+### nexusへのuploadが500 Server errorで失敗した時
+- nexusコンテナのログを表示させる
+
+```shell
+docker container logs mymaven.com
+```
+
+- ↓のような`OLowDiskSpaceException`が出て無いか調べる
+```
+2020-07-21 06:28:59,117+0000 WARN  [qtp74878466-7737] deployer org.sonatype.nexus.repository.httpbridge.internal.ViewServlet - Failure servicing: 
+PUT /repository/maven-releases/com/example/ci_sample/myandroidlibrary/1.2.0-dev.1.uncommitted+41a65f7/myandroidlibrary-1.2.0-dev.1.uncommitted+41a65f7.aar
+com.orientechnologies.orient.core.exception.OLowDiskSpaceException: 
+	Error occurred while executing a write operation to database 'component' due to limited free space on the disk (3176 MB). 
+
+The database is now working in read-only mode. Please close the database (or stop OrientDB), 
+make room on your hard drive and then reopen the database. The minimal required space is 4096 MB. 
+Required space is now set to 4096MB (you can change it by setting parameter storage.diskCache.diskFreeSpaceLimit) .
+```
+
+- vcsサーバの残り容量を調べる
+
+```shell
+df -kh
+```
+
+- /dev/sda2の残り容量が98%とかだったら危険な状態なので、いらないファイルを整理する
+- 主に~/docker/gitlab/backups/配下の古い日付のtgzを削除したりする
+
+```shell
+$ df -kh
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/sda2        40G   35G  3.1G  92% /
+```
