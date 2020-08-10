@@ -81,6 +81,14 @@ bash-4.4$ cat /nexus-data/admin.password
     - デフォルト設定は`Allow redploy`であるため、同じversion値での再登録が可能となっている
     - version='1.0.0-SNAPSHOT'で何度でも再登録できる
 
+#### 1.6. nexusのversion policyについて
+- deployment policy同様、各リポジトリはversion policyを持ち、これにより登録されるバイナリのバージョン書式を制限する
+- `release`: `1.2.0`のような`{major}.{minor}.{patch}`で構成されるバージョン書式が一般的だが、基本的にどんな書式でも許容される
+- `snapshot`: `1.2.0-SNAPSHOT`のように末尾が`SNAPSHOT`であることが条件となる
+  - nebula-releaseの`devSnapshot`タスクが作るバージョンは`1.1.0-dev.6+afce19e`のような書式であり、nexusのsnapshot version policyに反するためバイナリの登録が拒否されてしまう
+- 次にリリースするバージョンが決まっているようなプロジェクトの場合は`snapshot`のpolicyで動く`maven-snapshots`リポジトリを使えば良いが、自動バージョニングを採用したプロジェクトの場合は次のバージョンが分からないため、`release`のpolicyで動くmavenリポジトリを新たに作る必要がある
+
+
 ### 2. artifact登録用nexusアカウント作成
 #### 2.1. deploy専用Roleの作成
 
@@ -89,6 +97,8 @@ bash-4.4$ cat /nexus-data/admin.password
 - 特権にはadminとviewがあり、uploadだけならviewにするべき
 - maven-publicへのbrowseとreadは無くてもuploadできる
     - このRoleを適用したユーザでnexusにログインした時、maven-publicも閲覧できるようにしておく
+- **デフォルトでないmavenリポジトリを追加した場合、Roleに新規リポジトリへの特権を追加しておく必要がある**
+  - 後に`maven-devsnapshots`リポジトリを追加する手順があるので忘れずに
 
 ![](./attachments/create_nexus_role_02.png)
 
@@ -98,13 +108,19 @@ bash-4.4$ cat /nexus-data/admin.password
 
 ![](./attachments/create_nexus_user_02.png)
 
+### 3. devsnapshotsリポジトリの追加
+- 管理者権限でnexusにログインし、以下の設定で`maven-devsnapshots`リポジトリを作る
 
-### 3. build.gradleからartifact登録
-#### 3.1. mavenリポジトリとしてのURL確認
+![](2020-08-10-11-20-37.png)
+
+
+### 4. build.gradleからartifact登録
+#### 4.1. mavenリポジトリとしてのURL確認
 - nexusでRepositoriesを開き、以下のリポジトリがあることを確認する
     - maven-public
     - maven-releases
     - maven-snapshots
+    - maven-devsnapshots
 - 上記のリポジトリにjar/aarを登録しておき、build.gradleにてリポジトリURLを指定することになる
 
 ![](./attachments/repositories.png)
@@ -114,7 +130,7 @@ bash-4.4$ cat /nexus-data/admin.password
 
 ![](./attachments/repository_url.png)
 
-#### 3.2. AndroidStudioのプロジェクト構成(apk等に依存されるjar/aarを作る側)
+#### 4.2. AndroidStudioのプロジェクト構成(apk等に依存されるjar/aarを作る側)
 - 以下のようなプロジェクト構成と仮定する
     - androidlibモジュールはandroidlib.aarを作る
 ```
@@ -122,77 +138,119 @@ project/
 ├── androidlib
 │   └── build.gradle
 ├── build.gradle
-└── maven.gradle
+└── maven_publish.gradle
 ```
-#### 3.3. project/maven.gradle
+#### 4.2.1. [maven_publish.gradle](https://github.com/zakuro0w0/android_templates/blob/master/ci-template/maven_publish.gradle)
 
-```
-apply plugin: 'maven'
+```groovy
+apply plugin: "nebula.maven-publish"
 
-## nexusコンテナのURL
-ext.maven_url = 'http://localhost:8081/repository'
+// nexusコンテナのURL
+// nexusのコンテナ名とホスト名は共にmymaven.comにしておくこと
+// CIコンテナからのアクセスはnexusコンテナ名:{ポート番号}で行われる
+// nexusコンテナのlistenポート番号を80には出来ないので、CIコンテナからは8081でアクセスするしかない
+// これに合わせて開発者localからのアクセスもポート番号指定で行う必要がある
+ext.maven_url = 'http://mymaven.com:8081/repository'
 
-## このmaven.gradleをapplyで取り込んだmoduleにて、
-## implementationでnexusからpackageを取得できるようにするための定義
+// このmaven.gradleをapplyで取り込んだmoduleにて、
+// implementationでnexusからpackageを取得できるようにするための定義
 repositories {
     maven{
         url "${maven_url}/maven-public/"
     }
 }
 
-## `gradlew uploadArchives`コマンドで実行可能になるgradleタスクの定義
-## maven.gradleをapplyしたmoduleの成果物(jar/aar)を指定のリポジトリに登録する
-uploadArchives {
-    repositories {
-        mavenDeployer {
-            ## 正式版を登録するreleaseリポジトリ
-            repository(url: "${maven_url}/maven-releases") {
-                ## nexusのユーザ認証が必要
-                authentication(userName: 'deployer', password: 'xxxxx')
-            }
-            ## 開発中の成果物を登録するsnapshotリポジトリ
-            snapshotRepository(url: "${maven_url}/maven-snapshots") {
-                ## nexusのユーザ認証が必要
-                authentication(userName: 'deployer', password: 'xxxxx')
+// nebulaによるrelease(finalやdevSnapshot)時に必要な設定
+nebulaRelease {
+    // デフォルトではmaster, releaseといった名前のbranchのみnebula releaseが許容されている
+    // 今回nebulaでreleaseをするbranchにはproductionもいるため、branch名を追加する
+    addReleaseBranchPattern(/production/)
+}
+
+// artifactをmavenにuploadするgradleタスクの定義
+// 自動生成されるgradleタスク名はpublishNebulaPublicationToMavenRepositoryとなる
+afterEvaluate{
+    publishing {
+        publications {
+            nebula(MavenPublication) {
+                pluginManager.withPlugin("com.android.application"){
+                    // このgradleファイルをapplyしたモジュールがapkを作る場合
+                    from components.release_apk
+                }
+                pluginManager.withPlugin("com.android.library"){
+                    // このgradleファイルをapplyしたモジュールがaarを作る場合
+                    from components.release
+                }
+                repositories{
+                    maven{
+                        def releaseReposUrl = "${maven_url}/maven-releases"
+                        // master branchの時はsnapshotバージョンをuploadさせたい
+                        // nebula devSnapshotが作るバージョンと、nexusのsnapshotバージョンポリシーが合わない(バージョン末尾が-SNAPSHOTにならない)ため、
+                        // バージョンポリシーがrelease相当のmaven-devsnapshotsリポジトリをnexus上に作ってある
+                        def snapshotReposUrl = "${maven_url}/maven-devsnapshots"
+                        // `nebula -Psnapshot devSnapshot publishNebulaPublicationToMavenRepository`のような形式で-Pに続けて指定した文字列がpropertyとして認識される
+                        // `-Psnapshot`を付けてpublishした場合はmaven-devsnapshotsへuploadさせる
+                        // maven-gradleのチュートリアルでは`-Prelease`を付けてhasProperty('release')でURLを切り替える例が紹介されているが、これはnebulaでは使えない
+                        // nebulaは最初からreleaseプロパティを持っているため、`-Prelease`を付けていなくてもhasProperty('release')がtrueになっていしまい、意図したURLが選択されない
+                        url = project.hasProperty('snapshot') ? snapshotReposUrl : releaseReposUrl
+                        // maven_urlが指すmavenリポジトリのサインイン情報
+                        // 開発者はこのusername + passwordでmavenリポジトリを閲覧できる
+                        credentials{
+                            username = 'deployer'
+                            password = 'deployer'
+                        }
+                    }
+                }
             }
         }
     }
 }
 ```
 
-#### 3.4. project/androidlib/build.gradle
-
-```
-## 別途定義したmaven.gradleを取り込む
-apply from: rootProject.file('maven.gradle')
-
-## モジュール成果物(jar/aar)の所属groupを定義する
-## jar/aarに依存する利用者はここで定義したgroupをimplementationで指定することになる
-## 命名のルールは特にないが、androidのpackageと一致させておくと分かりやすいと思われる
-group = 'com.nexus.test.example'
-
-## implementationで指定する必要のあるモジュール成果物のバージョン
-## version値の決め方については[バージョンの種類と使い分け](https://kengotoda.gitbooks.io/what-is-maven/deploy/snapshot-and-stable.html)を参照
-## {major}.{minor}.{patch} が基本で、後ろに"-SNAPSHOT"を付けるとreleaseではなくsnapshotリポジトリに登録される
-## release/snapshotどちらに登録してもmaven-publicからは見える
-version = '1.0.0'
+#### 4.2.2. androidlib/build.gradle
+```groovy
+apply from: rootProject.file('maven_publish.gradle')
 ```
 
-#### 3.5. artifactをmavenリポジトリにupload
+#### 4.2.3. project/build.gradle
+```groovy
+plugins{
+    id 'nebula.release' version '15.0.0'
+    id 'nebula.maven-publish' version '14.0.0'
+}
+allprojects{
+    apply plugin: 'nebula.release'
+}
+```
+
+
+### 4.3. artifactをmavenリポジトリにupload
 - AndroidStudioのTerminalにて以下のコマンドを実行する
     - 通常、mavenへのuploadはサーバ側のCIプロセスが行うので、開発者が実行することは無い(というかしてはならない)
 
-```
-gradlew uploadArchives
+#### 最新のgit tagをバージョンとして利用して`maven-releases`に登録する
+```shell
+gradlew -Prelease.useLastTag=true final publishNebulaPublicationToMavenRepository
 ```
 
-#### 3.6. mavenリポジトリに登録した成果物をnexusで確認する
+#### 指定したバージョンで`maven-releases`に登録する
+```shell
+gradlew -Prelease.version=1.2.0 final publishNebulaPublicationToMavenRepository
+```
+
+#### 開発中バージョンで`maven-devsnapshots`に登録する
+```shell
+gradlew -Psnapshot devSnapshot publishNebulaPublicationToMavenRepository
+```
+
+
+#### 4.4. mavenリポジトリに登録した成果物をnexusで確認する
 
 ![](./attachments/upload_artifact.png)
 
-### 4. 登録したartifactをnexus経由で取得する
+### 5. 登録したartifactをnexus経由で取得する
 
-#### 4.1. AndroidStudioのプロジェクト構成(jar/aarに依存するapk側)
+#### 5.1. AndroidStudioのプロジェクト構成(jar/aarに依存するapk側)
 
 ```
 project/
@@ -201,7 +259,7 @@ project/
 ├── build.gradle
 └── maven.gradle
 ```
-#### 4.2. project/app/build.gradle
+#### 5.2. project/app/build.gradle
 - nexusのBrowseにてimplementationするためのコードを確認できる
     - 基本的には`implementation "{group}:{module}:{version}"`でOK
     - 開発中のバージョンが欲しい場合はversionを`1.0.0-SNAPSHOT`等にする
@@ -215,6 +273,6 @@ dependencies {
 }
 ```
 
-#### 4.3. gradleの同期を実行
+#### 5.3. gradleの同期を実行
 - AndroidStudioにてgradle同期を実行すれば指定したnexusのURLからimplementationで指定したandroidlib.aarのver1.0.0を入手できる
 - 同期に失敗する場合はURLやimplementationの記述にミスが無いか確認すること
