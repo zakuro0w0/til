@@ -111,7 +111,7 @@ bash-4.4$ cat /nexus-data/admin.password
 ### 3. devsnapshotsリポジトリの追加
 - 管理者権限でnexusにログインし、以下の設定で`maven-devsnapshots`リポジトリを作る
 
-![](2020-08-10-11-20-37.png)
+![](./attachments/2020-08-10-11-20-37.png)
 
 
 ### 4. build.gradleからartifact登録
