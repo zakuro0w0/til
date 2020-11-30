@@ -130,7 +130,7 @@ internal class KeyConvertService : Service() {
 // 現在のシステム時刻を取得
 val time = SystemClock.uptimeMillis()
 injectInputEvent(KeyEvent(time, time, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, 0))
-injectInputEvent(KeyEvent(time, time + 100, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_LEFT, 0))
+injectInputEvent(KeyEvent(time, time, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_LEFT, 0))
 ```
 
 ### apkに対するplatform署名
@@ -173,9 +173,28 @@ adb shell pm list permissions -f
 
 ![](attachments/2020-10-28-14-40-39.png)
 
-- 未確認だが、AndroidStudio標準エミュレータの場合は以下のように`Android Open Source Project`の表記があるシステムイメージを選択する必要があると思われる
+#### GenymotionではなくAndroidStudio標準エミュレータで動作確認する場合
+- AndroidStudio標準エミュレータの場合は以下のように`Android Open Source Project`の表記があるシステムイメージを選択してAVDを作成しておく必要がある
+  - システムイメージ名に`Google Play`が付いているものは`Google Inc.`製なので`adb root`でroot権限が取得できない
 
 ![](attachments/2020-10-28-14-43-48.png)
+
+- また、Genymotionと異なりAndroidStudioのGUIから起動する方法ではシステムアプリとしてのインストールはできないため、コマンドから起動する必要がある
+- Android SDKの`emulator.exe`にパスが通っている必要があり、Windows環境変数の`Path`に`C:\Users\{username}\AppData\Local\Android\Sdk\emulator`を追加しておくこと
+- `Sdk\tools\`にもemulator.exeがあり、こちらのパスが適用された場合は↓のエラーが発生してしまう
+	- ["Missing emulator engine program for 'x86' CPU"が発生する場合の対処法 - たねやつの木](https://www.taneyats.com/entry/android_emulator_command_error)
+
+- AVDのリストを確認する
+```
+emulator -list-avds
+```
+
+- `-avd`オプションでAVD名を指定し、`-writable-system`オプション付きで起動する
+```
+emulator -avd Pixel_2_API_28 -writable-system
+```
+
+
 
 #### AOSPビルドされた仮想デバイス向けのplatform署名キーを入手する
 - [GitHub.com | aosp-mirror/platform_build](https://github.com/aosp-mirror/platform_build/tree/master/target/product/security)にAOSP標準の署名キーがある
@@ -270,7 +289,7 @@ adb push {apk-name}.apk /system/priv-app/{apk-name}/
   - 特に起動オプションを意識しなくても/system配下を書き込み可能に出来る
   - 再起動しても/system配下のファイルが初期化されない(後述するシステムアプリのプリインストールで必須)
 - [AndroidDevelopers | コマンドラインからのエミュレータの起動](https://developer.android.com/studio/run/emulator-commandline#advanced)
-	- `-writable-system`オプション付きでemulatorを起動すれば標準エミュでも/system/配下をrwに出来るらしい
+	- `-writable-system`オプション付きでemulatorを起動すれば標準エミュでも/system/配下をrwに出来る
 
 > -writable-system	
 > エミュレーション セッション中に書き込み可能なシステム イメージを作成する際にこのオプションを使用します。方法は次のとおりです。
