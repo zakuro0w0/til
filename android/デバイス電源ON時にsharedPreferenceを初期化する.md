@@ -16,13 +16,13 @@
 
 ### SharedPreferenceの作法
 - preferenceにファイル名指定ではアクセスしたくない(名前を間違えるリスクを取りたくない)
-	- 名前指定無しでのアクセスには`getDefaultSharedPreferences()`が必要
-	- だが、これを提供する`PreferenceManager`は@Deprecatedになっている
-	- [PreferenceManagerが@Deprecatedで困った話 - Qiita](https://qiita.com/kph7mgb/items/bdaab20ca708df571b46)
+    - 名前指定無しでのアクセスには`getDefaultSharedPreferences()`が必要
+    - だが、これを提供する`PreferenceManager`は@Deprecatedになっている
+    - [PreferenceManagerが@Deprecatedで困った話 - Qiita](https://qiita.com/kph7mgb/items/bdaab20ca708df571b46)
 - なので、`preference-ktx`を使おう
-	- [Preference  \|  Android デベロッパー  |  Android Developers](https://developer.android.com/jetpack/androidx/releases/preference?hl=ja)
-		- 2020.04.15時点の最新は1.1.1
-		- package名も`androidx.preference:preference`ではなく`androidx.preference:preference-ktx`になっている
+    - [Preference  \|  Android デベロッパー  |  Android Developers](https://developer.android.com/jetpack/androidx/releases/preference?hl=ja)
+        - 2020.04.15時点の最新は1.1.1
+        - package名も`androidx.preference:preference`ではなく`androidx.preference:preference-ktx`になっている
 - `SharedPreference::putInt()`のような型名付き関数を`put()`にまとめる例は以下が参考になった
     - [ぼくの考えた最強のSharedPreferences](https://qiita.com/susu_susu__/items/76a59e0cf6c93db74bd7)
 
@@ -39,33 +39,33 @@ dependencies {
 import androidx.preference.PreferenceManager
 
 fun foo(context: Context){
-	// Activityが見えない場所からのアクセスにはContextが必須
-	// PreferenceManager経由ならファイル名指定は不要
-	PreferenceManager.getDefaultSharedPreferences(context).edit{
-		putInt("foo", 100)
-		commit()
+    // Activityが見えない場所からのアクセスにはContextが必須
+    // PreferenceManager経由ならファイル名指定は不要
+    PreferenceManager.getDefaultSharedPreferences(context).edit{
+        putInt("foo", 100)
+        commit()
     }
 }
 
 class MainActivity : AppCompatActivity() {
-	fun bar(){
-		// Activity配下ならファイル名指定無しでアクセスできる
-		// が、Activity::getPreferences()でアクセスするxmlはこの場合MainActivity.xmlであり、
+    fun bar(){
+        // Activity配下ならファイル名指定無しでアクセスできる
+        // が、Activity::getPreferences()でアクセスするxmlはこの場合MainActivity.xmlであり、
         // PreferenceManager経由でアクセスできるxmlとは別物なので注意
-		this.getPreferences(Context.MODE_PRIVATE).edit{
-			putInt("bar", 200)
-			commit()
-		}
-	}
-	
-	fun hoge(){
-		// foo()と同じファイルに書き込むにはPreferenceManagerを経由するか、
+        this.getPreferences(Context.MODE_PRIVATE).edit{
+            putInt("bar", 200)
+            commit()
+        }
+    }
+    
+    fun hoge(){
+        // foo()と同じファイルに書き込むにはPreferenceManagerを経由するか、
         // Context::getSharedPreferences()にパッケージ名を指定するか
-		this.androidContext.getSharedPreferences(this.packageName, Context.MODE_PRIVATE).edit{
-			putInt("hoge", 300)
-			commit()
-		}
-	}
+        this.androidContext.getSharedPreferences(this.packageName, Context.MODE_PRIVATE).edit{
+            putInt("hoge", 300)
+            commit()
+        }
+    }
 }
 ```
 
