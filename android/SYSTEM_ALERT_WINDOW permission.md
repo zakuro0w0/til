@@ -94,7 +94,7 @@ emulator -avd {AVD-name} -writable-system
 ```
 
 ```shell
-adb root && adb remount && adb shell mkdir /system/priv-app/> {apk-name}/ && adb push {apk-name}.apk /system/priv-app/{apk-name}/
+adb root && adb remount && adb shell mkdir /system/priv-app/{apk-name}/ && adb push {apk-name}.apk /system/priv-app/{apk-name}/
 ```
 
 ### 候補3. apkにplatform署名を施す
