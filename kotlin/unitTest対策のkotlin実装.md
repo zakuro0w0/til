@@ -51,3 +51,48 @@ class MainActivity : AppCompatActivity() {
     }
 }
 ```
+
+## lateinitやby lazyを指定した変数にはsmart-castが効かない
+- 先のnullableの話と少し関連する
+- `?`演算子によるnullチェックとscope関数を組み合わせた記述は強力
+- だがjacocoによるC1カバレッジ測定を考慮に入れると面倒な場合が出てくる
+- 素直にif文でチェックした方が良い場合もあるかも知れないが、by lazyやlateinitが付くとsmart-castが効かないケースがある
+
+```kotlin
+class MyClass(val x: Int){
+    fun foo(){
+        println(x)
+    }
+}
+
+// by lazyでnullable型変数を初期化する
+val myClass: MyClass? by lazy { MyClass(10) }
+// lateinitでnullable型変数を初期化する
+lateinit var myClass2: MyClass?
+// by lazyもlateinitも付けない普通のパターン
+val myClass3: MyClass? = MyClass(30)
+
+fun failureSmartCast(){
+    // if文でnullチェックしたくなった場合...
+    if(myClass != null){
+        // ↓の呼び出しは以下のエラーが発生する
+        // Smart cast to 'TargetServices.MyClass' is impossible, because 'myClass' is a property that has open or custom getter
+        myClass.foo()
+    }
+
+    if(myClass2 != null){
+        // ↓のlateinit版も同様のエラーが発生する
+        myClass2.foo()
+    }
+}
+
+fun betterAccess(){
+    // 通常はnullチェックをこう記述するので問題無いが...
+    myClass?.foo()
+
+    if(myClass3 != null){
+        // by lazyもlateinitも付いてない方はちゃんとsmart-castが効く
+        myClass3.foo()
+    }
+}
+```
