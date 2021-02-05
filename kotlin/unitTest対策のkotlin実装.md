@@ -119,3 +119,53 @@ object MyObject{
 - 初期化のタイミングをモック化の後に持ってくるためには、初期化タイミングを制御できなければならない
 - 故に、objectにメンバは持たせるべきではなく、振る舞いのみを実装するべき
     - 実際に↑の例はobjectではなくclassにすることで対応した
+
+## nullチェックのif-elseはscope関数で書くべきではない
+```kotlin
+fun foo(x: Int?){
+    x?.also {
+        // nullでない時にやる処理
+        println(x)
+    }?: run{
+        // nullの時にやる処理
+        println("null")
+    }
+}
+```
+- `?`演算子とscope関数を組み合わせるとnullチェックのif-elseは↑のように記述できる
+    - ちなみにalsoの部分はletではダメ(letは最後の評価式を戻り値としてしまうため)
+- kotlinらしく見えるが、これもjacocoでC1カバレッジ測定する際に困るポイントとなる
+- `x`自体がnullのテストは簡単に記述できるのだが、alsoの戻り値がnoon-nullのテストが難しい
+    - ↑のkotlin実装は↓のようなjavaコードになる
+    - 一度nullチェックしたxに対して、もう一度nullチェックする分岐が生成されている
+
+```Java
+public final void foo(@Nullable Integer x) {
+    boolean var3;
+    boolean var4;
+    boolean var6;
+    boolean var8;
+    if (x != null) {
+        var3 = false;
+        var4 = false;
+        int it = ((Number)x).intValue();
+        var6 = false;
+        int var7 = x;
+        var8 = false;
+        System.out.println(var7);
+        if (x != null) {
+            // このパスを通すのが難しい
+            return;
+        }
+    }
+
+    var3 = false;
+    var4 = false;
+    TargetServices $this$run = (TargetServices)this;
+    var6 = false;
+    String var10 = "null";
+    var8 = false;
+    System.out.println(var10);
+    Unit var10000 = Unit.INSTANCE;
+}
+```
