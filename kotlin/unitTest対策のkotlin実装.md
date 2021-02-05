@@ -96,3 +96,26 @@ fun betterAccess(){
     }
 }
 ```
+
+## モック化を考慮するとメンバ持ちobjectは作るべきではない
+
+```kotlin
+class TargetA : IListener{}
+class TargetB : IListener{}
+class TargetC : IListener{}
+
+object MyObject{
+    val targets: List<IListener> = listOf(
+        TargetA(), TargetB(), TargetC()
+    )
+    fun onEvent(){
+        targets.forEach { it.onEvent() }
+    }
+}
+```
+
+- ↑のような例だと`targets`が持つTargetA, TargetB, TargetCをmockk等でモック化しておきたい
+- しかし、objectが持つメンバはunitTestでモック化を挟む隙も無く初期化されてしまう
+- 初期化のタイミングをモック化の後に持ってくるためには、初期化タイミングを制御できなければならない
+- 故に、objectにメンバは持たせるべきではなく、振る舞いのみを実装するべき
+    - 実際に↑の例はobjectではなくclassにすることで対応した
