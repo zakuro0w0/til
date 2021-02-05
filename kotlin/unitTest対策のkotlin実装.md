@@ -169,3 +169,55 @@ public final void foo(@Nullable Integer x) {
     Unit var10000 = Unit.INSTANCE;
 }
 ```
+
+## coroutineを使った関数はjacocoでclassファイルを除外するべき
+
+```kotlin
+fun foo() = runBlocking {
+    println(10)
+}
+```
+
+- ↑のkotlinコードは↓のjavaコードを生成する
+    - 1個runBlockingを入れただけでかなりの量のコードが自動生成されていることになる
+    - 特に`invokeSuspend()`のswitch caseのカバレッジを網羅するのはかなり難しい
+    - というか、この分岐を通すためのテストは自分で書いたkotlinコードのテストではなく、coroutineライブラリの再テストになる
+    - jacocoが参照するclassファイルは関数単位で出力され、カバレッジ測定の除外もclassファイル単位で指定できるため、coroutineを含む関数のclassファイルはおとなしく除外した方が良い
+
+```Java
+public final void foo() {
+    BuildersKt.runBlocking$default((CoroutineContext)null, (Function2)(new Function2((Continuation)null) {
+        private CoroutineScope p$;
+        int label;
+
+        @Nullable
+        public final Object invokeSuspend(@NotNull Object $result) {
+            Object var5 = IntrinsicsKt.getCOROUTINE_SUSPENDED();
+            switch(this.label) {
+            case 0:
+                ResultKt.throwOnFailure($result);
+                CoroutineScope $this$runBlocking = this.p$;
+                String var3 = "hello world";
+                boolean var4 = false;
+                System.out.println(var3);
+                return Unit.INSTANCE;
+            default:
+                throw new IllegalStateException("call to 'resume' before 'invoke' with coroutine");
+            }
+        }
+
+        @NotNull
+        public final Continuation create(@Nullable Object value, @NotNull Continuation completion) {
+            Intrinsics.checkNotNullParameter(completion, "completion");
+            Function2 var3 = new <anonymous constructor>(completion);
+            var3.p$ = (CoroutineScope)value;
+            return var3;
+        }
+
+        public final Object invoke(Object var1, Object var2) {
+            return ((<undefinedtype>)this.create(var1, (Continuation)var2)).invokeSuspend(Unit.INSTANCE);
+        }
+    }), 1, (Object)null);
+}
+```
+
